@@ -49,7 +49,11 @@ public class AuthService {
         user.setNickname(request.getUsername());
         user.setRole("USER");
         user.setStatus(1);
-        userMapper.insert(user);
+        try {
+            userMapper.insert(user);
+        } catch (org.springframework.dao.DataIntegrityViolationException e) {
+            return Result.fail("用户名、邮箱或手机号已存在");
+        }
 
         return Result.ok();
     }

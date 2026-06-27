@@ -1,16 +1,17 @@
 server:
-  port: 8081
+  port: ${SERVER_PORT:8081}
 
 spring:
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://localhost:3306/campus_trade?useUnicode=true&characterEncoding=utf-8&serverTimezone=Asia/Shanghai
-    username: root
-    password: 123456
+    url: ${DB_URL:jdbc:mysql://localhost:3306/campus_trade?useUnicode=true&characterEncoding=utf-8&serverTimezone=Asia/Shanghai}
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:}
   data:
     redis:
-      host: localhost
-      port: 6379
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
   servlet:
     multipart:
       max-file-size: 10MB
@@ -24,22 +25,21 @@ mybatis-plus:
   type-aliases-package: com.campus.entity
   configuration:
     map-underscore-to-camel-case: true
-    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
   global-config:
     db-config:
       id-type: auto
 
 springdoc:
   api-docs:
-    path: /v3/api-docs
+    enabled: false
   swagger-ui:
-    path: /swagger-ui.html
+    enabled: false
 
 app:
   jwt:
-    secret: Y2FtcHVzLXRyYWRlLWp3dC1zZWNyZXQta2V5LWZvci1kZXZlbG9wbWVudA==
-    expiration: 86400000
+    secret: ${JWT_SECRET:}
+    expiration: ${JWT_EXPIRATION:86400000}
 
 file:
   upload:
-    path: ./uploads
+    path: ${UPLOAD_PATH:/var/uploads/campus-trade}

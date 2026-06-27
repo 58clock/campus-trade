@@ -13,11 +13,19 @@ const routes = [
   { path: '/my-orders', name: 'MyOrders', component: () => import('@/views/MyOrders.vue'), meta: { auth: true } },
   { path: '/messages', name: 'Messages', component: () => import('@/views/Messages.vue'), meta: { auth: true } },
 
-  // 后台管理
-  { path: '/admin/dashboard', name: 'AdminDashboard', component: () => import('@/views/admin/Dashboard.vue'), meta: { auth: true, admin: true } },
-  { path: '/admin/users', name: 'AdminUsers', component: () => import('@/views/admin/UserManage.vue'), meta: { auth: true, admin: true } },
-  { path: '/admin/products', name: 'AdminProducts', component: () => import('@/views/admin/ProductAudit.vue'), meta: { auth: true, admin: true } },
-  { path: '/admin/reports', name: 'AdminReports', component: () => import('@/views/admin/ReportManage.vue'), meta: { auth: true, admin: true } },
+  // 后台管理（嵌套路由 + 侧边栏布局）
+  {
+    path: '/admin',
+    component: () => import('@/views/admin/AdminLayout.vue'),
+    meta: { auth: true, admin: true },
+    children: [
+      { path: '', redirect: '/admin/orders' },
+      { path: 'orders', name: 'AdminOrders', component: () => import('@/views/admin/OrderManage.vue') },
+      { path: 'users', name: 'AdminUsers', component: () => import('@/views/admin/UserManage.vue') },
+      { path: 'products', name: 'AdminProducts', component: () => import('@/views/admin/ProductAudit.vue') },
+      { path: 'reports', name: 'AdminReports', component: () => import('@/views/admin/ReportManage.vue') },
+    ],
+  },
 ]
 
 const router = createRouter({

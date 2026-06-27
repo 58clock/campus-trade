@@ -28,6 +28,7 @@ public class AdminService {
     private final OrderMapper orderMapper;
     private final ReportMapper reportMapper;
     private final ReviewMapper reviewMapper;
+    private final org.springframework.security.crypto.password.PasswordEncoder passwordEncoder;
 
     // ==================== [桩] D 实现的真实接口 ====================
 
@@ -80,15 +81,48 @@ public class AdminService {
     }
 
     public Result<Void> resetPassword(Long id) {
-        // TODO: D - 重置为默认密码 123456
         User user = userMapper.selectById(id);
         if (user == null) return Result.fail("用户不存在");
+        user.setPassword(passwordEncoder.encode("123456"));
+        userMapper.updateById(user);
         return Result.ok();
     }
 
     public Result<PageResult<ProductVO>> listAllProducts(int pageNum, int size, String keyword, String status) {
-        // TODO: D - 全部商品（含下架和删除），审核用
-        return Result.ok(PageResult.empty());
+        LambdaQueryWrapper<Product> wrapper = new LambdaQueryWrapper<>();
+        if (keyword != null && !keyword.isBlank()) {
+            wrapper.like(Product::getTitle, keyword);
+        }
+        if (status != null && !status.isBlank()) {
+            wrapper.eq(Product::getStatus, status);
+        }
+        wrapper.orderByDesc(Product::getCreatedAt);
+
+        Page<Product> page = new Page<>(pageNum, size);
+        Page<Product> result = productMapper.selectPage(page, wrapper);
+
+        List<ProductVO> records = result.getRecords().stream().map(p -> {
+            ProductVO vo = new ProductVO();
+            vo.setId(p.getId());
+            vo.setUserId(p.getUserId());
+            vo.setTitle(p.getTitle());
+            vo.setDescription(p.getDescription());
+            vo.setCategory(p.getCategory());
+            vo.setPrice(p.getPrice());
+            vo.setOriginalPrice(p.getOriginalPrice());
+            vo.setConditionLevel(p.getConditionLevel());
+            vo.setStatus(p.getStatus());
+            vo.setViewCount(p.getViewCount());
+            vo.setCreatedAt(p.getCreatedAt());
+            User seller = userMapper.selectById(p.getUserId());
+            if (seller != null) {
+                vo.setSellerName(seller.getNickname());
+                vo.setSellerAvatar(seller.getAvatar());
+            }
+            return vo;
+        }).collect(Collectors.toList());
+
+        return Result.ok(new PageResult<>(records, result.getTotal(), pageNum, size));
     }
 
     public Result<Void> forceOffShelf(Long id) {
@@ -170,12 +204,24 @@ public class AdminService {
         vo.setTotalSales(totalSales);
 
         // 近一周每日交易额
+        LocalDate sevenDaysAgo = LocalDate.now().minusDays(6);
+        List<Order> recentOrders = orderMapper.selectList(
+                new LambdaQueryWrapper<Order>()
+                        .ne(Order::getStatus, "CANCELLED")
+                        .ge(Order::getPaidAt, sevenDaysAgo.atStartOfDay()));
+
+        Map<LocalDate, BigDecimal> dayMap = recentOrders.stream()
+                .filter(o -> o.getPaidAt() != null)
+                .collect(Collectors.groupingBy(
+                        o -> o.getPaidAt().toLocalDate(),
+                        Collectors.reducing(BigDecimal.ZERO, Order::getAmount, BigDecimal::add)));
+
         List<StatisticsVO.DailySales> weekly = new ArrayList<>();
         for (int i = 6; i >= 0; i--) {
             LocalDate day = LocalDate.now().minusDays(i);
             StatisticsVO.DailySales ds = new StatisticsVO.DailySales();
             ds.setDay(day.format(DateTimeFormatter.ofPattern("MM-dd")));
-            ds.setTotal(BigDecimal.ZERO);
+            ds.setTotal(dayMap.getOrDefault(day, BigDecimal.ZERO));
             weekly.add(ds);
         }
         vo.setWeeklySales(weekly);
@@ -197,5 +243,67 @@ public class AdminService {
         vo.setOrderStatusDistribution(statusDist);
 
         return Result.ok(vo);
+    }
+
+    // ==================== 订单管理 ====================
+
+    public Result<PageResult<OrderVO>> listAllOrders(int pageNum, int size, String keyword, String status) {
+        LambdaQueryWrapper<Order> wrapper = new LambdaQueryWrapper<>();
+        if (status != null && !status.isBlank()) {
+            wrapper.eq(Order::getStatus, status);
+        }
+        wrapper.orderByDesc(Order::getCreatedAt);
+
+        Page<Order> page = new Page<>(pageNum, size);
+        Page<Order> result = orderMapper.selectPage(page, wrapper);
+
+        List<OrderVO> records = result.getRecords().stream().map(o -> {
+            OrderVO vo = new OrderVO();
+            vo.setId(o.getId());
+            vo.setProductId(o.getProductId());
+            vo.setBuyerId(o.getBuyerId());
+            vo.setSellerId(o.getSellerId());
+            vo.setAmount(o.getAmount());
+            vo.setStatus(o.getStatus());
+            vo.setPaidAt(o.getPaidAt());
+            vo.setShippedAt(o.getShippedAt());
+            vo.setReceivedAt(o.getReceivedAt());
+            vo.setCompletedAt(o.getCompletedAt());
+            vo.setCancelledAt(o.getCancelledAt());
+            vo.setCancelReason(o.getCancelReason());
+            vo.setCreatedAt(o.getCreatedAt());
+
+            User buyer = userMapper.selectById(o.getBuyerId());
+            if (buyer != null) vo.setBuyerName(buyer.getNickname());
+
+            User seller = userMapper.selectById(o.getSellerId());
+            if (seller != null) vo.setSellerName(seller.getNickname());
+
+            Product product = productMapper.selectById(o.getProductId());
+            if (product != null) vo.setProductTitle(product.getTitle());
+
+            return vo;
+        }).collect(Collectors.toList());
+
+        // 按商品标题过滤
+        if (keyword != null && !keyword.isBlank()) {
+            records = records.stream()
+                    .filter(vo -> vo.getProductTitle() != null
+                            && vo.getProductTitle().contains(keyword))
+                    .collect(Collectors.toList());
+        }
+
+        return Result.ok(new PageResult<>(records, result.getTotal(), pageNum, size));
+    }
+
+    public Result<Void> cancelOrder(Long id) {
+        Order order = orderMapper.selectById(id);
+        if (order == null) return Result.fail("订单不存在");
+        if ("CANCELLED".equals(order.getStatus())) return Result.fail("订单已取消");
+        order.setStatus("CANCELLED");
+        order.setCancelledAt(LocalDateTime.now());
+        order.setCancelReason("管理员取消");
+        orderMapper.updateById(order);
+        return Result.ok();
     }
 }

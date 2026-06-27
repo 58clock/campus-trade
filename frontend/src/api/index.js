@@ -111,6 +111,9 @@ export const adminApi = {
   handleReport: (id, action, note) => api.put(`/admin/reports/${id}/handle`, null, { params: { action, note } }),
   // statistics
   getStatistics: () => api.get('/admin/statistics'),
+  // orders
+  listOrders: (params) => api.get('/admin/orders', { params }),
+  cancelOrder: (id) => api.put(`/admin/orders/${id}/cancel`),
 }
 
 // ==================== Report API ====================
