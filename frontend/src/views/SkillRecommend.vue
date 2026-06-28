@@ -61,52 +61,6 @@
       </el-card>
     </div>
 
-    <!-- 数据来源调试面板 -->
-    <el-card v-if="debug" style="margin-top:32px;background:#fafafa" shadow="never">
-      <template #header>
-        <span style="font-weight:600">数据来源: {{ debug.source_table }}</span>
-        <el-tag size="small" style="margin-left:8px">调试信息</el-tag>
-      </template>
-      <p style="font-size:13px;color:#666;margin-bottom:12px">
-        从 <b>browse_history</b> 表查到 <b>{{ debug.total_rows }}</b> 条浏览记录<br/>
-        从 <b>product</b> 表查到 <b>{{ debug.viewed_products?.length || 0 }}</b> 个浏览过的商品 → 用于提取关键词模糊搜索
-      </p>
-      <el-collapse>
-        <el-collapse-item title="browse_history 表原始数据 ({{ debug.total_rows }} 行)" name="1">
-          <el-table :data="debug.rows" size="small" border stripe max-height="300">
-            <el-table-column prop="userId" label="userId" width="70" />
-            <el-table-column prop="productId" label="productId" width="90" />
-            <el-table-column prop="category" label="category" width="110" />
-            <el-table-column prop="productTitle" label="product表查到的标题" min-width="200" />
-            <el-table-column prop="createdAt" label="createdAt" width="180" />
-          </el-table>
-        </el-collapse-item>
-        <el-collapse-item title="viewed_products (从 product 表 SQL: SELECT * FROM product WHERE id IN (...))" name="2">
-          <el-table :data="debug.viewed_products" size="small" border stripe max-height="300">
-            <el-table-column prop="id" label="id" width="60" />
-            <el-table-column prop="title" label="title" min-width="250" />
-            <el-table-column prop="category" label="category" width="110" />
-            <el-table-column prop="keyword" label="extractKeyword(标题) → LIKE查询" width="180" />
-          </el-table>
-        </el-collapse-item>
-        <el-collapse-item title="猜你喜欢 推荐结果 ({{ personalized.length }} 条)" name="3">
-          <el-table :data="personalized" size="small" border stripe max-height="300">
-            <el-table-column prop="productId" label="productId" width="80" />
-            <el-table-column prop="title" label="title" min-width="200" />
-            <el-table-column prop="category" label="category" width="110" />
-            <el-table-column label="score" width="70"><template #default="{row}">{{ Math.round(row.score * 100) }}%</template></el-table-column>
-          </el-table>
-        </el-collapse-item>
-        <el-collapse-item title="全站热门 推荐结果 ({{ hot.length }} 条)" name="4">
-          <el-table :data="hot" size="small" border stripe max-height="300">
-            <el-table-column prop="productId" label="productId" width="80" />
-            <el-table-column prop="title" label="title" min-width="200" />
-            <el-table-column prop="category" label="category" width="110" />
-            <el-table-column prop="viewCount" label="viewCount" width="90" />
-          </el-table>
-        </el-collapse-item>
-      </el-collapse>
-    </el-card>
   </div>
 </template>
 
@@ -118,8 +72,6 @@ import { Star, TrendCharts, InfoFilled } from '@element-plus/icons-vue'
 const personalized = ref([])
 const hot = ref([])
 const analysis = ref(null)
-const debug = ref(null)
-
 const catMap = { BOOK: '书籍', ELECTRONICS: '电子产品', LIFESTYLE: '生活用品', SPORTS: '运动用品', OTHER: '其他' }
 function catName(key) { return catMap[key] || key }
 
@@ -130,7 +82,6 @@ onMounted(async () => {
       personalized.value = res.data.personalized || []
       hot.value = res.data.hot || []
       analysis.value = res.data.analysis || null
-      debug.value = res.data.debug || null
     }
   } catch { /* handled */ }
 })

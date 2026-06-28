@@ -83,15 +83,13 @@ public class SkillService {
             }
         }
 
-        // 6. 分析 + 调试
+        // 6. 分析
         Map<String, Object> analysis = buildAnalysis(history, categoryCount);
-        Map<String, Object> debug = buildDebug(history, allProducts, personalized, hot);
 
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("analysis", analysis);
         result.put("personalized", personalized);
         result.put("hot", hot);
-        result.put("debug", debug);
         return Result.ok(result);
     }
 
@@ -144,27 +142,6 @@ public class SkillService {
         }
         a.put("topCategories", cats);
         return a;
-    }
-
-    private Map<String, Object> buildDebug(List<BrowseHistory> history, List<Product> all,
-                                            List<Map<String, Object>> per, List<Map<String, Object>> hot) {
-        Map<String, Object> d = new LinkedHashMap<>();
-        d.put("source_table", "browse_history");
-        d.put("total_rows", history.size());
-        d.put("all_products_count", all.size());
-        d.put("personalized_count", per.size());
-        d.put("hot_count", hot.size());
-        List<Map<String, Object>> rows = new ArrayList<>();
-        for (BrowseHistory bh : history) {
-            Map<String, Object> r = new LinkedHashMap<>();
-            r.put("userId", bh.getUserId());
-            r.put("productId", bh.getProductId());
-            r.put("category", bh.getCategory());
-            r.put("createdAt", bh.getCreatedAt() != null ? bh.getCreatedAt().toString() : "null");
-            rows.add(r);
-        }
-        d.put("rows", rows);
-        return d;
     }
 
     private String catName(String c) {
