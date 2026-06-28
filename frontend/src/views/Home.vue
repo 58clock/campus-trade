@@ -103,7 +103,13 @@ function search() { currentPage.value = 1; fetchProducts() }
 async function fetchProducts() {
   loading.value = true
   try {
-    const res = await productApi.list({ ...query, page: currentPage.value, size: pageSize })
+    const params = { page: currentPage.value, size: pageSize }
+    if (query.keyword) params.keyword = query.keyword
+    if (query.category) params.category = query.category
+    if (query.minPrice !== null) params.minPrice = query.minPrice
+    if (query.maxPrice !== null) params.maxPrice = query.maxPrice
+    if (query.sort) params.sort = query.sort
+    const res = await productApi.list(params)
     products.value = res.data?.records || []
     total.value = res.data?.total || 0
   } catch { /* handled */ }
