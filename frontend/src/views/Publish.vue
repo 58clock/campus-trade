@@ -25,9 +25,6 @@
         </el-form-item>
         <el-form-item label="售价" required>
           <el-input-number v-model="form.price" :min="0" :precision="2" />
-          <el-button type="warning" size="small" style="margin-left:12px" :disabled="!canSuggest" @click="handleSuggestPrice">
-            建议售价
-          </el-button>
         </el-form-item>
         <el-form-item label="原价">
           <el-input-number v-model="form.originalPrice" :min="0" :precision="2" />
@@ -45,35 +42,13 @@
         </el-form-item>
       </el-form>
     </el-card>
-
-    <!-- 建议售价弹窗 -->
-    <el-dialog v-model="priceDialogVisible" title="AI 定价建议" width="420px">
-      <div v-if="priceSuggestion">
-        <el-descriptions :column="1" border>
-          <el-descriptions-item label="分类">{{ priceSuggestion.category }}</el-descriptions-item>
-          <el-descriptions-item label="成色">{{ priceSuggestion.conditionLevel }}</el-descriptions-item>
-          <el-descriptions-item label="市场均价">¥{{ priceSuggestion.marketAvgPrice }}</el-descriptions-item>
-          <el-descriptions-item label="建议售价">
-            <span style="color:#e6a23c;font-weight:bold;font-size:18px">¥{{ priceSuggestion.suggestedPrice }}</span>
-          </el-descriptions-item>
-          <el-descriptions-item label="建议区间">
-            ¥{{ priceSuggestion.rangeLow }} ~ ¥{{ priceSuggestion.rangeHigh }}
-          </el-descriptions-item>
-          <el-descriptions-item label="参考样本">{{ priceSuggestion.sampleCount }} 件同类商品</el-descriptions-item>
-        </el-descriptions>
-      </div>
-      <template #footer>
-        <el-button @click="priceDialogVisible = false">关闭</el-button>
-        <el-button type="primary" @click="applyPrice">使用建议价</el-button>
-      </template>
-    </el-dialog>
   </div>
 </template>
 
 <script setup>
-import { reactive, ref, computed } from 'vue'
+import { reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { productApi, skillApi } from '@/api'
+import { productApi } from '@/api'
 import { ElMessage } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
 
@@ -83,25 +58,6 @@ const form = reactive({
   price: null, originalPrice: null, description: ''
 })
 const images = ref([])
-const priceDialogVisible = ref(false)
-const priceSuggestion = ref(null)
-
-const canSuggest = computed(() => form.category && form.conditionLevel)
-
-async function handleSuggestPrice() {
-  try {
-    const res = await skillApi.suggestPrice(form.category, form.conditionLevel)
-    priceSuggestion.value = res.data
-    priceDialogVisible.value = true
-  } catch { /* handled */ }
-}
-
-function applyPrice() {
-  if (priceSuggestion.value) {
-    form.price = parseFloat(priceSuggestion.value.suggestedPrice)
-  }
-  priceDialogVisible.value = false
-}
 
 function handleImageChange(file) { images.value.push(file.raw) }
 

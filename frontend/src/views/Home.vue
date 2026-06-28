@@ -36,23 +36,6 @@
       </el-row>
     </el-card>
 
-    <!-- AI 推荐区 -->
-    <el-card v-if="userStore.isLoggedIn && recommends.length > 0" style="margin-bottom:16px">
-      <template #header>
-        <span style="font-weight:600">猜你喜欢</span>
-        <el-tag type="warning" size="small" style="margin-left:8px">AI 推荐</el-tag>
-      </template>
-      <div class="product-grid">
-        <el-card v-for="p in recommends" :key="p.productId" class="product-card" @click="goDetail(p.productId)">
-          <div class="product-info">
-            <h3>{{ p.title }}</h3>
-            <p class="price">¥{{ p.price }}</p>
-            <p class="meta">{{ p.category }} · 热度 {{ p.viewCount }}</p>
-          </div>
-        </el-card>
-      </div>
-    </el-card>
-
     <!-- 商品列表 -->
     <div v-if="products.length > 0" class="product-grid">
       <el-card v-for="p in products" :key="p.id" class="product-card" @click="goDetail(p.id)">
@@ -83,14 +66,11 @@
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { productApi, skillApi } from '@/api'
-import { useUserStore } from '@/stores/user'
+import { productApi } from '@/api'
 import { Search } from '@element-plus/icons-vue'
 
 const router = useRouter()
-const userStore = useUserStore()
 const products = ref([])
-const recommends = ref([])
 const total = ref(0)
 const loading = ref(false)
 const currentPage = ref(1)
@@ -116,15 +96,7 @@ async function fetchProducts() {
   finally { loading.value = false }
 }
 
-async function fetchRecommend() {
-  if (!userStore.isLoggedIn) return
-  try {
-    const res = await skillApi.recommend(4)
-    recommends.value = res.data || []
-  } catch { /* handled */ }
-}
-
-onMounted(() => { fetchProducts(); fetchRecommend() })
+onMounted(fetchProducts)
 </script>
 
 <style scoped>
