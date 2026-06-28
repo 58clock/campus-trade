@@ -36,8 +36,25 @@
       </el-row>
     </el-card>
 
+    <!-- AI 推荐区 -->
+    <el-card v-if="userStore.isLoggedIn && recommends.length > 0" style="margin-bottom:16px">
+      <template #header>
+        <span style="font-weight:600">猜你喜欢</span>
+        <el-tag type="warning" size="small" style="margin-left:8px">AI 推荐</el-tag>
+      </template>
+      <div class="product-grid">
+        <el-card v-for="p in recommends" :key="p.productId" class="product-card" @click="goDetail(p.productId)">
+          <div class="product-info">
+            <h3>{{ p.title }}</h3>
+            <p class="price">¥{{ p.price }}</p>
+            <p class="meta">{{ p.category }} · 热度 {{ p.viewCount }}</p>
+          </div>
+        </el-card>
+      </div>
+    </el-card>
+
     <!-- 商品列表 -->
-    <div class="product-grid">
+    <div v-if="products.length > 0" class="product-grid">
       <el-card v-for="p in products" :key="p.id" class="product-card" @click="goDetail(p.id)">
         <img :src="p.images?.[0] || '/placeholder.png'" class="product-img" />
         <div class="product-info">
@@ -47,6 +64,8 @@
         </div>
       </el-card>
     </div>
+
+    <el-empty v-if="!loading && products.length === 0" description="暂无商品" />
 
     <!-- 分页 -->
     <el-pagination
@@ -62,15 +81,18 @@
 </template>
 
 <script setup>
-// TODO: B - 实现商品列表（搜索、筛选、分页）
 import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { productApi } from '@/api'
+import { productApi, skillApi } from '@/api'
+import { useUserStore } from '@/stores/user'
 import { Search } from '@element-plus/icons-vue'
 
 const router = useRouter()
+const userStore = useUserStore()
 const products = ref([])
+const recommends = ref([])
 const total = ref(0)
+const loading = ref(false)
 const currentPage = ref(1)
 const pageSize = 12
 const query = reactive({ keyword: '', category: '', minPrice: null, maxPrice: null, sort: '' })
@@ -79,9 +101,24 @@ function goDetail(id) { router.push(`/product/${id}`) }
 function search() { currentPage.value = 1; fetchProducts() }
 
 async function fetchProducts() {
-  // TODO: B - 调用 productApi.list({ ...query, page: currentPage.value, size: pageSize })
+  loading.value = true
+  try {
+    const res = await productApi.list({ ...query, page: currentPage.value, size: pageSize })
+    products.value = res.data?.records || []
+    total.value = res.data?.total || 0
+  } catch { /* handled */ }
+  finally { loading.value = false }
 }
-onMounted(fetchProducts)
+
+async function fetchRecommend() {
+  if (!userStore.isLoggedIn) return
+  try {
+    const res = await skillApi.recommend(4)
+    recommends.value = res.data || []
+  } catch { /* handled */ }
+}
+
+onMounted(() => { fetchProducts(); fetchRecommend() })
 </script>
 
 <style scoped>
