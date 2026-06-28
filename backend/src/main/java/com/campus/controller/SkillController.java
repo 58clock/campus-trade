@@ -8,7 +8,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
 import java.util.Map;
 
 @Tag(name = "Skill", description = "开放Skill接口（智能推荐/自动定价）")
@@ -19,10 +18,10 @@ public class SkillController {
 
     private final SkillService skillService;
 
-    @Operation(summary = "智能推荐", description = "根据用户浏览历史推荐相似商品")
+    @Operation(summary = "智能推荐", description = "根据用户浏览历史推荐相似商品，返回分析数据+推荐列表")
     @PostMapping("/recommend")
-    public Result<List<Map<String, Object>>> recommend(Authentication auth,
-                                                        @RequestParam(defaultValue = "10") int limit) {
+    public Result<Map<String, Object>> recommend(Authentication auth,
+                                                  @RequestParam(defaultValue = "10") int limit) {
         return skillService.recommend(getUserId(auth), limit);
     }
 
