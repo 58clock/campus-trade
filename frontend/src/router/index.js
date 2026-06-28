@@ -12,6 +12,7 @@ const routes = [
   { path: '/my-products', name: 'MyProducts', component: () => import('@/views/MyProducts.vue'), meta: { auth: true } },
   { path: '/my-orders', name: 'MyOrders', component: () => import('@/views/MyOrders.vue'), meta: { auth: true } },
   { path: '/messages', name: 'Messages', component: () => import('@/views/Messages.vue'), meta: { auth: true } },
+  { path: '/my-reports', name: 'MyReports', component: () => import('@/views/MyReports.vue'), meta: { auth: true } },
 
   // 后台管理（嵌套路由 + 侧边栏布局）
   {

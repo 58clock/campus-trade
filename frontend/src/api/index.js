@@ -119,6 +119,7 @@ export const adminApi = {
 // ==================== Report API ====================
 export const reportApi = {
   submit: (targetType, targetId, reason) => api.post('/reports', null, { params: { targetType, targetId, reason } }),
+  getMyReports: () => api.get('/reports/my'),
 }
 
 // ==================== Skill API ====================
