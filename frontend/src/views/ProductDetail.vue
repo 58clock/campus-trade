@@ -15,8 +15,19 @@
           <el-descriptions-item label="卖家">{{ product.sellerName }}</el-descriptions-item>
           <el-descriptions-item label="浏览">{{ product.viewCount }}次</el-descriptions-item>
         </el-descriptions>
+        <el-alert
+          v-if="product.status === 'OFF_SHELF'"
+          title="该商品因违规已被管理员下架，无法购买"
+          type="error" :closable="false" show-icon style="margin-top:12px" />
+        <el-alert
+          v-if="product.status === 'DELETED'"
+          title="该商品已被管理员删除，无法购买"
+          type="error" :closable="false" show-icon style="margin-top:12px" />
+        <el-tag v-if="product.status === 'LOCKED'" type="warning" size="large" style="margin-top:12px">该商品已被锁定（已有订单），无法重复购买</el-tag>
         <div style="margin-top:16px">
-          <el-button type="danger" size="large" @click="handleBuy">我想要</el-button>
+          <el-button type="danger" size="large" :disabled="product.status !== 'ON_SALE'" @click="handleBuy">
+            {{ product.status === 'OFF_SHELF' ? '已下架' : product.status === 'DELETED' ? '已删除' : product.status === 'LOCKED' ? '已被购买' : '我想要' }}
+          </el-button>
           <el-button size="large" @click="openReportDialog">举报</el-button>
         </div>
       </el-col>

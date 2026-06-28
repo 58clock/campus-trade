@@ -171,11 +171,17 @@ public class AdminService {
     }
 
     public Result<Void> handleReport(Long id, String action, String note) {
-        // TODO: D - 处理举报, action: resolve/dismiss
         Report report = reportMapper.selectById(id);
         if (report == null) return Result.fail("举报不存在");
         if ("resolve".equals(action)) {
             report.setStatus("RESOLVED");
+            if ("PRODUCT".equals(report.getTargetType())) {
+                Product p = productMapper.selectById(report.getTargetId());
+                if (p != null && "ON_SALE".equals(p.getStatus())) {
+                    p.setStatus("OFF_SHELF");
+                    productMapper.updateById(p);
+                }
+            }
         } else if ("dismiss".equals(action)) {
             report.setStatus("DISMISSED");
         } else {
