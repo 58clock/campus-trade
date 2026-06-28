@@ -38,22 +38,24 @@ public class SkillService {
         Map<String, Long> categoryCount = history.stream()
                 .collect(Collectors.groupingBy(BrowseHistory::getCategory, LinkedHashMap::new, Collectors.counting()));
 
-        // 4. 版块一：猜你喜欢 — 用浏览商品的标题做模糊搜索
+        // 4. 版块一：猜你喜欢 — 按浏览过的分类推荐同类热门商品
         List<Map<String, Object>> personalized = new ArrayList<>();
         Set<Long> seen = new HashSet<>();
-        if (!viewedProducts.isEmpty()) {
-            for (Product viewed : viewedProducts) {
-                // 从标题提取关键词（取前几个字做模糊匹配）
-                String kw = extractKeyword(viewed.getTitle());
-                if (kw.isEmpty()) continue;
-
-                List<Product> matches = productMapper.selectList(
+        if (!categoryCount.isEmpty()) {
+            // 按浏览次数排序分类，取前3个最感兴趣的分类
+            List<String> topCategories = categoryCount.entrySet().stream()
+                    .sorted((a, b) -> Long.compare(b.getValue(), a.getValue()))
+                    .limit(3)
+                    .map(Map.Entry::getKey)
+                    .toList();
+            for (String cat : topCategories) {
+                List<Product> catProducts = productMapper.selectList(
                         new LambdaQueryWrapper<Product>()
+                                .eq(Product::getCategory, cat)
                                 .eq(Product::getStatus, "ON_SALE")
                                 .ne(Product::getUserId, userId)
-                                .like(Product::getTitle, kw)
                                 .orderByDesc(Product::getViewCount));
-                for (Product p : matches) {
+                for (Product p : catProducts) {
                     if (!viewedProductIds.contains(p.getId()) && seen.add(p.getId())) {
                         long freq = categoryCount.getOrDefault(p.getCategory(), 0L);
                         personalized.add(buildItem(p, freq, history.size(), true));
