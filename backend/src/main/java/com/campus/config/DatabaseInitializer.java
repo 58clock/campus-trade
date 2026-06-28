@@ -1,12 +1,13 @@
 package com.campus.config;
 
+import com.baomidou.mybatisplus.core.MybatisSqlSessionFactoryBuilder;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.ibatis.session.SqlSession;
+import org.apache.ibatis.session.SqlSessionFactory;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.stereotype.Component;
 
 import javax.sql.DataSource;
-import java.sql.Connection;
-import java.sql.Statement;
 
 @Slf4j
 @Component
@@ -20,8 +21,8 @@ public class DatabaseInitializer implements CommandLineRunner {
 
     @Override
     public void run(String... args) {
-        try (Connection conn = dataSource.getConnection();
-             Statement stmt = conn.createStatement()) {
+        try (var conn = dataSource.getConnection();
+             var stmt = conn.createStatement()) {
             stmt.execute("""
                 CREATE TABLE IF NOT EXISTS `browse_history` (
                     `id`          BIGINT       NOT NULL AUTO_INCREMENT,

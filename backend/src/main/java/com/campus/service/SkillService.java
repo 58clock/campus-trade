@@ -77,10 +77,41 @@ public class SkillService {
         // 6. 分析
         Map<String, Object> analysis = buildAnalysis(history, categoryCount);
 
+        // 7. 调试信息：显示数据来自哪些表、每张表查到了什么
+        Map<String, Object> debug = new LinkedHashMap<>();
+        // browse_history 表原始数据
+        List<Map<String, Object>> debugHistory = new ArrayList<>();
+        for (BrowseHistory bh : history) {
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("userId", bh.getUserId());
+            row.put("productId", bh.getProductId());
+            row.put("category", bh.getCategory());
+            Product p = productMapper.selectById(bh.getProductId());
+            row.put("productTitle", p != null ? p.getTitle() : "(商品不存在)");
+            row.put("createdAt", bh.getCreatedAt() != null ? bh.getCreatedAt().toString() : "null");
+            debugHistory.add(row);
+        }
+        debug.put("source_table", "browse_history");
+        debug.put("total_rows", debugHistory.size());
+        debug.put("rows", debugHistory);
+
+        // viewed products（从 product 表查到的）
+        List<Map<String, Object>> debugViewed = new ArrayList<>();
+        for (Product vp : viewedProducts) {
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("id", vp.getId());
+            row.put("title", vp.getTitle());
+            row.put("category", vp.getCategory());
+            row.put("keyword", extractKeyword(vp.getTitle()));
+            debugViewed.add(row);
+        }
+        debug.put("viewed_products", debugViewed);
+
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("analysis", analysis);
         result.put("personalized", personalized);
         result.put("hot", hot);
+        result.put("debug", debug);
         log.info("Recommend: personalized={}, hot={}", personalized.size(), hot.size());
         return Result.ok(result);
     }
