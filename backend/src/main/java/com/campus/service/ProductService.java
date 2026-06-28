@@ -82,10 +82,41 @@ public class ProductService {
     }
 
     public Result<ProductVO> getProductById(Long id) {
-        // TODO: B - 查询商品详情，同时 view_count +1
-        // 关联查询卖家信息 (Join user 表)
-        // 解析 images JSON 字符串为 List<String>
-        return Result.ok(new ProductVO());
+        Product prod = productMapper.selectById(id);
+        if (prod == null) return Result.fail("商品不存在");
+
+        // 浏览量 +1
+        prod.setViewCount(prod.getViewCount() + 1);
+        productMapper.updateById(prod);
+
+        ProductVO vo = new ProductVO();
+        vo.setId(prod.getId());
+        vo.setUserId(prod.getUserId());
+        vo.setTitle(prod.getTitle());
+        vo.setDescription(prod.getDescription());
+        vo.setCategory(prod.getCategory());
+        vo.setPrice(prod.getPrice());
+        vo.setOriginalPrice(prod.getOriginalPrice());
+        vo.setConditionLevel(prod.getConditionLevel());
+        vo.setViewCount(prod.getViewCount());
+        vo.setStatus(prod.getStatus());
+        vo.setCreatedAt(prod.getCreatedAt());
+
+        if (prod.getImages() != null && !prod.getImages().isBlank()) {
+            try {
+                vo.setImages(
+                    new com.fasterxml.jackson.databind.ObjectMapper()
+                        .readValue(prod.getImages(), List.class));
+            } catch (Exception ignored) {}
+        }
+
+        User seller = userMapper.selectById(prod.getUserId());
+        if (seller != null) {
+            vo.setSellerName(seller.getNickname());
+            vo.setSellerAvatar(seller.getAvatar());
+        }
+
+        return Result.ok(vo);
     }
 
     public Result<ProductVO> createProduct(Long userId, String title, String description,
