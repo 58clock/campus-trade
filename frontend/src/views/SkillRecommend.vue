@@ -43,12 +43,13 @@
         <div class="product-info">
           <div class="product-header">
             <h3>{{ p.title }}</h3>
-            <el-tag size="small" type="warning">{{ Math.round(p.score * 100) }}% 匹配</el-tag>
+            <el-tag v-if="p.score >= 0.60" size="small" type="success">{{ Math.round(p.score * 100) }}% 匹配</el-tag>
+            <el-tag v-else size="small" type="info">{{ Math.round(p.score * 100) }}% 匹配</el-tag>
           </div>
           <p class="price">¥{{ p.price }}</p>
           <p class="meta">{{ catName(p.category) }} · {{ p.viewCount }} 次浏览</p>
-          <el-progress :percentage="Math.round(p.score * 100)" :stroke-width="6" style="margin:8px 0" />
-          <p class="reason">
+          <el-progress :percentage="Math.round(p.score * 100)" :stroke-width="6" :color="p.score >= 0.60 ? '#67C23A' : '#909399'" style="margin:8px 0" />
+          <p class="reason" :class="{ 'reason-supplement': p.score < 0.60 }">
             <el-icon style="vertical-align:middle"><InfoFilled /></el-icon>
             {{ p.reason }}
           </p>
@@ -96,4 +97,5 @@ onMounted(async () => {
 .price { color: #f56c6c; font-size: 20px; font-weight: bold; margin: 4px 0; }
 .meta { color: #999; font-size: 12px; }
 .reason { color: #409EFF; font-size: 12px; margin-top: 6px; }
+.reason-supplement { color: #909399; }
 </style>

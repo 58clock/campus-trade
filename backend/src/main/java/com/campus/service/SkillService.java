@@ -41,12 +41,12 @@ public class SkillService {
         Map<String, Long> categoryCount = history.stream()
                 .collect(Collectors.groupingBy(BrowseHistory::getCategory, LinkedHashMap::new, Collectors.counting()));
 
-        // 用户浏览过的商品ID
+        // 用户浏览过的商品ID，避免重复推荐
         Set<Long> viewedIds = history.stream()
                 .map(BrowseHistory::getProductId)
                 .collect(Collectors.toSet());
 
-        // 用户浏览的价格范围
+        // 用户浏览过的商品价格范围
         Set<Long> browsedProductIds = new HashSet<>(viewedIds);
         List<Product> browsedProducts = productMapper.selectBatchIds(browsedProductIds);
         BigDecimal browsePriceMin = null, browsePriceMax = null;
@@ -59,8 +59,9 @@ public class SkillService {
                     .max(BigDecimal::compareTo).orElse(BigDecimal.ZERO);
         }
 
-        // 在每个分类下找热门商品
-        List<Product> candidates = new ArrayList<>();
+        // Phase 1: 在用户浏览过的分类中找商品
+        Set<Long> seen = new HashSet<>();
+        List<Product> ranked = new ArrayList<>();
         for (String category : categoryCount.keySet()) {
             List<Product> categoryProducts = productMapper.selectList(
                     new LambdaQueryWrapper<Product>()
@@ -68,19 +69,15 @@ public class SkillService {
                             .eq(Product::getStatus, "ON_SALE")
                             .ne(Product::getUserId, userId)
                             .orderByDesc(Product::getViewCount)
-                            .last("LIMIT 10"));
-            candidates.addAll(categoryProducts);
-        }
-
-        // 去重 + 按分类频次和浏览量综合排序
-        Set<Long> seen = new HashSet<>();
-        List<Product> ranked = new ArrayList<>();
-        for (Product p : candidates) {
-            if (seen.add(p.getId()) && !viewedIds.contains(p.getId())) {
-                ranked.add(p);
+                            .last("LIMIT 20"));
+            for (Product p : categoryProducts) {
+                if (seen.add(p.getId()) && !viewedIds.contains(p.getId())) {
+                    ranked.add(p);
+                }
             }
         }
 
+        // 按分类频次和浏览量排序
         ranked.sort((a, b) -> {
             long aCnt = categoryCount.getOrDefault(a.getCategory(), 0L);
             long bCnt = categoryCount.getOrDefault(b.getCategory(), 0L);
@@ -88,7 +85,30 @@ public class SkillService {
             return Integer.compare(b.getViewCount(), a.getViewCount());
         });
 
+        // Phase 2: 如果不够，从浏览过的分类中再捞（放宽viewedId限制）
         if (ranked.size() < limit) {
+            for (String category : categoryCount.keySet()) {
+                List<Product> more = productMapper.selectList(
+                        new LambdaQueryWrapper<Product>()
+                                .eq(Product::getCategory, category)
+                                .eq(Product::getStatus, "ON_SALE")
+                                .ne(Product::getUserId, userId)
+                                .orderByDesc(Product::getViewCount)
+                                .last("LIMIT 30"));
+                for (Product p : more) {
+                    if (seen.add(p.getId())) {
+                        ranked.add(p);
+                    }
+                    if (ranked.size() >= limit) break;
+                }
+                if (ranked.size() >= limit) break;
+            }
+        }
+
+        // Phase 3: 实在不够才用其他分类热门补充，但分数打折扣
+        boolean hasSupplements = false;
+        if (ranked.size() < limit) {
+            hasSupplements = true;
             List<Product> hot = productMapper.selectList(
                     new LambdaQueryWrapper<Product>()
                             .eq(Product::getStatus, "ON_SALE")
@@ -124,7 +144,7 @@ public class SkillService {
             analysis.put("priceRange", browsePriceMin + " ~ " + browsePriceMax);
         }
 
-        // 构建商品列表，每个商品带推荐理由
+        // 构建商品列表
         List<Map<String, Object>> items = new ArrayList<>();
         int count = Math.min(limit, ranked.size());
         for (int i = 0; i < count; i++) {
@@ -137,11 +157,18 @@ public class SkillService {
             item.put("viewCount", p.getViewCount());
 
             long catFreq = categoryCount.getOrDefault(p.getCategory(), 0L);
-            double score = 0.6 + Math.min(catFreq * 0.08, 0.35) + Math.random() * 0.05;
-            item.put("score", Math.min(score, 0.99));
+            boolean fromBrowsedCategory = categoryCount.containsKey(p.getCategory());
 
-            // 推荐理由
-            item.put("reason", buildReason(p.getCategory(), catFreq, history.size()));
+            if (fromBrowsedCategory) {
+                double score = 0.70 + Math.min(catFreq * 0.06, 0.25) + Math.random() * 0.04;
+                item.put("score", Math.min(score, 0.98));
+                item.put("reason", buildReason(p.getCategory(), catFreq, history.size()));
+            } else {
+                // 补充商品分数低于浏览分类商品
+                double score = 0.45 + Math.random() * 0.15;
+                item.put("score", Math.min(score, 0.60));
+                item.put("reason", "热门" + catName(p.getCategory()) + "，你可能也感兴趣");
+            }
 
             items.add(item);
         }
@@ -153,20 +180,25 @@ public class SkillService {
     }
 
     private String buildReason(String category, long catFreq, int totalBrowses) {
-        String catName = switch (category) {
+        String catName = catName(category);
+        double ratio = (double) catFreq / totalBrowses;
+        if (ratio >= 0.6) {
+            return "你最近主要浏览" + catName + "，这是该分类的热门商品";
+        } else if (ratio >= 0.3) {
+            return "你经常浏览" + catName + "，为你推荐同类商品";
+        } else {
+            return "你浏览过" + catName + "，猜你喜欢";
+        }
+    }
+
+    private String catName(String category) {
+        return switch (category) {
             case "BOOK" -> "书籍";
             case "ELECTRONICS" -> "电子产品";
             case "LIFESTYLE" -> "生活用品";
             case "SPORTS" -> "运动用品";
             default -> "其他";
         };
-        if (catFreq >= totalBrowses * 0.6) {
-            return "你最近主要浏览" + catName + "，这是该分类的热门商品";
-        } else if (catFreq >= totalBrowses * 0.3) {
-            return "你经常浏览" + catName + "，为你推荐同类商品";
-        } else {
-            return "你浏览过" + catName + "商品，猜你喜欢";
-        }
     }
 
     private Result<Map<String, Object>> recommendHot(Long userId, int limit) {
@@ -185,7 +217,7 @@ public class SkillService {
             item.put("price", p.getPrice());
             item.put("category", p.getCategory());
             item.put("viewCount", p.getViewCount());
-            item.put("score", 0.7 + Math.random() * 0.2);
+            item.put("score", 0.70 + Math.random() * 0.20);
             item.put("reason", "全站热门商品，暂无你的浏览记录");
             items.add(item);
         }
