@@ -2,9 +2,7 @@ package com.campus.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.campus.common.Result;
-import com.campus.entity.BrowseHistory;
 import com.campus.entity.Product;
-import com.campus.mapper.BrowseHistoryMapper;
 import com.campus.mapper.ProductMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -13,6 +11,7 @@ import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.sql.ResultSet;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -22,33 +21,36 @@ import java.util.stream.Collectors;
 public class SkillService {
 
     private final ProductMapper productMapper;
-    private final BrowseHistoryMapper browseHistoryMapper;
     private final JdbcTemplate jdbcTemplate;
 
     public Result<Map<String, Object>> recommend(Long userId, int limit) {
         // 确保表存在
         ensureBrowseHistoryTable();
 
-        // 1. 查询用户浏览历史
-        List<BrowseHistory> history;
+        // 1. 查询用户浏览历史（直接用 JDBC 避免 MyBatis-Plus 映射问题）
+        List<Object[]> history;
         try {
-            history = browseHistoryMapper.selectList(
-                    new LambdaQueryWrapper<BrowseHistory>()
-                            .eq(BrowseHistory::getUserId, userId)
-                            .orderByDesc(BrowseHistory::getCreatedAt)
-                            .last("LIMIT 100"));
+            history = jdbcTemplate.query(
+                "SELECT category, product_id FROM browse_history WHERE user_id = ? ORDER BY created_at DESC LIMIT 100",
+                (ResultSet rs, int rowNum) -> new Object[]{
+                    rs.getString("category"),
+                    rs.getLong("product_id")
+                },
+                userId);
         } catch (Exception e) {
-            log.warn("Failed to query browse_history", e);
+            log.warn("Failed to query browse_history: {}", e.getMessage());
             history = List.of();
         }
 
         // 2. 统计浏览的分类频次
-        Map<String, Long> categoryCount = history.stream()
-                .collect(Collectors.groupingBy(BrowseHistory::getCategory, LinkedHashMap::new, Collectors.counting()));
-
-        Set<Long> viewedIds = history.stream()
-                .map(BrowseHistory::getProductId)
-                .collect(Collectors.toSet());
+        Map<String, Long> categoryCount = new LinkedHashMap<>();
+        Set<Long> viewedIds = new HashSet<>();
+        for (Object[] row : history) {
+            String cat = (String) row[0];
+            Long pid = (Long) row[1];
+            categoryCount.merge(cat, 1L, Long::sum);
+            viewedIds.add(pid);
+        }
 
         // 3. 版块一："猜你喜欢"
         List<Map<String, Object>> personalized = new ArrayList<>();
