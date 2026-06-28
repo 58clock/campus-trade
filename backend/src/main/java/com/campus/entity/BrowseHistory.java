@@ -17,6 +17,5 @@ public class BrowseHistory {
 
     private String category;
 
-    @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createdAt;
 }

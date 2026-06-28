@@ -7,8 +7,10 @@ import com.campus.common.Result;
 import com.campus.dto.CreateProductRequest;
 import com.campus.dto.ProductListRequest;
 import com.campus.dto.ProductVO;
+import com.campus.entity.BrowseHistory;
 import com.campus.entity.Product;
 import com.campus.entity.User;
+import com.campus.mapper.BrowseHistoryMapper;
 import com.campus.mapper.ProductMapper;
 import com.campus.mapper.UserMapper;
 import lombok.RequiredArgsConstructor;
@@ -17,6 +19,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -27,6 +30,7 @@ public class ProductService {
 
     private final ProductMapper productMapper;
     private final UserMapper userMapper;
+    private final BrowseHistoryMapper browseHistoryMapper;
     private final JdbcTemplate jdbcTemplate;
 
     // ==================== [桩] B 实现的真实接口 ====================
@@ -96,6 +100,7 @@ public class ProductService {
         // 记录浏览历史（登录用户）
         if (userId != null) {
             try {
+                // 确保表存在
                 jdbcTemplate.execute("""
                     CREATE TABLE IF NOT EXISTS `browse_history` (
                         `id`          BIGINT   NOT NULL AUTO_INCREMENT,
@@ -105,16 +110,18 @@ public class ProductService {
                         `created_at`  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
                         PRIMARY KEY (`id`),
                         KEY `idx_user_id` (`user_id`),
-                        KEY `idx_category` (`category`),
-                        KEY `idx_created_at` (`created_at`)
+                        KEY `idx_category` (`category`)
                     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
                 """);
-                jdbcTemplate.update(
-                    "INSERT INTO browse_history (user_id, product_id, category) VALUES (?, ?, ?)",
-                    userId, id, prod.getCategory());
+                BrowseHistory bh = new BrowseHistory();
+                bh.setUserId(userId);
+                bh.setProductId(id);
+                bh.setCategory(prod.getCategory());
+                bh.setCreatedAt(LocalDateTime.now());
+                browseHistoryMapper.insert(bh);
                 log.info("Browse recorded: userId={}, productId={}, category={}", userId, id, prod.getCategory());
             } catch (Exception e) {
-                log.warn("Failed to record browse: userId={}, productId={}", userId, id, e);
+                log.warn("Failed to record browse: {}", e.getMessage());
             }
         }
 

@@ -2,7 +2,9 @@ package com.campus.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.campus.common.Result;
+import com.campus.entity.BrowseHistory;
 import com.campus.entity.Product;
+import com.campus.mapper.BrowseHistoryMapper;
 import com.campus.mapper.ProductMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -11,7 +13,6 @@ import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.sql.ResultSet;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -21,38 +22,34 @@ import java.util.stream.Collectors;
 public class SkillService {
 
     private final ProductMapper productMapper;
+    private final BrowseHistoryMapper browseHistoryMapper;
     private final JdbcTemplate jdbcTemplate;
 
     public Result<Map<String, Object>> recommend(Long userId, int limit) {
         // 确保表存在
-        ensureBrowseHistoryTable();
+        ensureTable();
 
-        // 1. 查询用户浏览历史（直接用 JDBC 避免 MyBatis-Plus 映射问题）
-        List<Object[]> history;
+        // 1. 查浏览历史（MP）
+        List<BrowseHistory> history;
         try {
-            history = jdbcTemplate.query(
-                "SELECT category, product_id FROM browse_history WHERE user_id = ? ORDER BY created_at DESC LIMIT 100",
-                (ResultSet rs, int rowNum) -> new Object[]{
-                    rs.getString("category"),
-                    rs.getLong("product_id")
-                },
-                userId);
+            history = browseHistoryMapper.selectList(
+                    new LambdaQueryWrapper<BrowseHistory>()
+                            .eq(BrowseHistory::getUserId, userId)
+                            .orderByDesc(BrowseHistory::getCreatedAt)
+                            .last("LIMIT 100"));
         } catch (Exception e) {
-            log.warn("Failed to query browse_history: {}", e.getMessage());
+            log.warn("Query browse_history failed: {}", e.getMessage());
             history = List.of();
         }
 
-        // 2. 统计浏览的分类频次
-        Map<String, Long> categoryCount = new LinkedHashMap<>();
-        Set<Long> viewedIds = new HashSet<>();
-        for (Object[] row : history) {
-            String cat = (String) row[0];
-            Long pid = (Long) row[1];
-            categoryCount.merge(cat, 1L, Long::sum);
-            viewedIds.add(pid);
-        }
+        // 2. 统计分类频次和已浏览商品
+        Map<String, Long> categoryCount = history.stream()
+                .collect(Collectors.groupingBy(BrowseHistory::getCategory, LinkedHashMap::new, Collectors.counting()));
+        Set<Long> viewedIds = history.stream()
+                .map(BrowseHistory::getProductId)
+                .collect(Collectors.toSet());
 
-        // 3. 版块一："猜你喜欢"
+        // 3. 版块一：猜你喜欢 — 基于浏览分类
         List<Map<String, Object>> personalized = new ArrayList<>();
         if (!history.isEmpty()) {
             Set<Long> seen = new HashSet<>();
@@ -84,7 +81,7 @@ public class SkillService {
             }
         }
 
-        // 4. 版块二："全站热门"
+        // 4. 版块二：全站热门
         Set<Long> excludeIds = new HashSet<>(viewedIds);
         for (Map<String, Object> item : personalized) {
             excludeIds.add(((Number) item.get("productId")).longValue());
@@ -103,11 +100,10 @@ public class SkillService {
             if (hot.size() >= limit) break;
         }
 
-        // 5. 分析数据
+        // 5. 分析
         Map<String, Object> analysis = new LinkedHashMap<>();
         analysis.put("totalBrowses", history.size());
         analysis.put("uniqueProducts", viewedIds.size());
-
         List<Map<String, Object>> catList = new ArrayList<>();
         long maxCount = categoryCount.values().stream().max(Long::compareTo).orElse(1L);
         for (Map.Entry<String, Long> entry : categoryCount.entrySet()) {
@@ -126,7 +122,7 @@ public class SkillService {
         return Result.ok(result);
     }
 
-    private void ensureBrowseHistoryTable() {
+    private void ensureTable() {
         try {
             jdbcTemplate.execute("""
                 CREATE TABLE IF NOT EXISTS `browse_history` (
@@ -137,8 +133,7 @@ public class SkillService {
                     `created_at`  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
                     PRIMARY KEY (`id`),
                     KEY `idx_user_id` (`user_id`),
-                    KEY `idx_category` (`category`),
-                    KEY `idx_created_at` (`created_at`)
+                    KEY `idx_category` (`category`)
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
             """);
         } catch (Exception ignored) {}
@@ -152,7 +147,6 @@ public class SkillService {
         item.put("price", p.getPrice());
         item.put("category", p.getCategory());
         item.put("viewCount", p.getViewCount());
-
         long catFreq = categoryCount.getOrDefault(p.getCategory(), 0L);
         if (personalized && catFreq > 0) {
             double score = 0.70 + Math.min(catFreq * 0.06, 0.25) + Math.random() * 0.04;
