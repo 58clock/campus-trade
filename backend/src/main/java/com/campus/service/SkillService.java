@@ -7,6 +7,8 @@ import com.campus.entity.Product;
 import com.campus.mapper.BrowseHistoryMapper;
 import com.campus.mapper.ProductMapper;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -14,14 +16,19 @@ import java.math.RoundingMode;
 import java.util.*;
 import java.util.stream.Collectors;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class SkillService {
 
     private final ProductMapper productMapper;
     private final BrowseHistoryMapper browseHistoryMapper;
+    private final JdbcTemplate jdbcTemplate;
 
     public Result<Map<String, Object>> recommend(Long userId, int limit) {
+        // 确保表存在
+        ensureBrowseHistoryTable();
+
         // 1. 查询用户浏览历史
         List<BrowseHistory> history;
         try {
@@ -31,6 +38,7 @@ public class SkillService {
                             .orderByDesc(BrowseHistory::getCreatedAt)
                             .last("LIMIT 100"));
         } catch (Exception e) {
+            log.warn("Failed to query browse_history", e);
             history = List.of();
         }
 
@@ -42,7 +50,7 @@ public class SkillService {
                 .map(BrowseHistory::getProductId)
                 .collect(Collectors.toSet());
 
-        // 3. 版块一："猜你喜欢" — 从浏览分类中推荐
+        // 3. 版块一："猜你喜欢"
         List<Map<String, Object>> personalized = new ArrayList<>();
         if (!history.isEmpty()) {
             Set<Long> seen = new HashSet<>();
@@ -74,7 +82,7 @@ public class SkillService {
             }
         }
 
-        // 4. 版块二："全站热门" — 始终展示，排除已推荐和用户自己的
+        // 4. 版块二："全站热门"
         Set<Long> excludeIds = new HashSet<>(viewedIds);
         for (Map<String, Object> item : personalized) {
             excludeIds.add(((Number) item.get("productId")).longValue());
@@ -114,6 +122,24 @@ public class SkillService {
         result.put("personalized", personalized);
         result.put("hot", hot);
         return Result.ok(result);
+    }
+
+    private void ensureBrowseHistoryTable() {
+        try {
+            jdbcTemplate.execute("""
+                CREATE TABLE IF NOT EXISTS `browse_history` (
+                    `id`          BIGINT   NOT NULL AUTO_INCREMENT,
+                    `user_id`     BIGINT   NOT NULL,
+                    `product_id`  BIGINT   NOT NULL,
+                    `category`    VARCHAR(50) NOT NULL,
+                    `created_at`  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (`id`),
+                    KEY `idx_user_id` (`user_id`),
+                    KEY `idx_category` (`category`),
+                    KEY `idx_created_at` (`created_at`)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+            """);
+        } catch (Exception ignored) {}
     }
 
     private Map<String, Object> buildItem(Product p, Map<String, Long> categoryCount,

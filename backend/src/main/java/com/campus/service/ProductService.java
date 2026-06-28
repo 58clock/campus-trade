@@ -14,12 +14,15 @@ import com.campus.entity.BrowseHistory;
 import com.campus.mapper.BrowseHistoryMapper;
 import com.campus.mapper.UserMapper;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 import java.util.stream.Collectors;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class ProductService {
@@ -27,6 +30,7 @@ public class ProductService {
     private final ProductMapper productMapper;
     private final UserMapper userMapper;
     private final BrowseHistoryMapper browseHistoryMapper;
+    private final JdbcTemplate jdbcTemplate;
 
     // ==================== [桩] B 实现的真实接口 ====================
 
@@ -95,12 +99,16 @@ public class ProductService {
         // 记录浏览历史（登录用户）
         if (userId != null) {
             try {
+                ensureBrowseHistoryTable();
                 BrowseHistory history = new BrowseHistory();
                 history.setUserId(userId);
                 history.setProductId(id);
                 history.setCategory(prod.getCategory());
                 browseHistoryMapper.insert(history);
-            } catch (Exception ignored) {}
+                log.debug("Browse recorded: userId={}, productId={}, category={}", userId, id, prod.getCategory());
+            } catch (Exception e) {
+                log.warn("Failed to record browse: userId={}, productId={}", userId, id, e);
+            }
         }
 
         ProductVO vo = new ProductVO();
@@ -158,5 +166,23 @@ public class ProductService {
     public Result<PageResult<ProductVO>> getMyProducts(Long userId, int page, int size) {
         // TODO: B - 查当前用户的所有商品（排除 DELETED），分页返回
         return Result.ok(PageResult.empty());
+    }
+
+    private void ensureBrowseHistoryTable() {
+        try {
+            jdbcTemplate.execute("""
+                CREATE TABLE IF NOT EXISTS `browse_history` (
+                    `id`          BIGINT   NOT NULL AUTO_INCREMENT,
+                    `user_id`     BIGINT   NOT NULL,
+                    `product_id`  BIGINT   NOT NULL,
+                    `category`    VARCHAR(50) NOT NULL,
+                    `created_at`  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (`id`),
+                    KEY `idx_user_id` (`user_id`),
+                    KEY `idx_category` (`category`),
+                    KEY `idx_created_at` (`created_at`)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+            """);
+        } catch (Exception ignored) {}
     }
 }
