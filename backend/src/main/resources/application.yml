@@ -7,6 +7,9 @@ spring:
     url: jdbc:mysql://localhost:3306/campus_trade?useUnicode=true&characterEncoding=utf-8&serverTimezone=Asia/Shanghai
     username: root
     password: 123456
+  sql:
+    init:
+      mode: always
   data:
     redis:
       host: localhost

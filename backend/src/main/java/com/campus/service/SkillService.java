@@ -8,7 +8,6 @@ import com.campus.mapper.BrowseHistoryMapper;
 import com.campus.mapper.ProductMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -23,11 +22,8 @@ public class SkillService {
 
     private final ProductMapper productMapper;
     private final BrowseHistoryMapper browseHistoryMapper;
-    private final JdbcTemplate jdbcTemplate;
 
     public Result<Map<String, Object>> recommend(Long userId, int limit) {
-        ensureTable();
-
         // 1. 查询浏览历史
         List<BrowseHistory> history = queryHistory(userId);
         log.info("Browse history for userId={}: {} records", userId, history.size());
@@ -147,23 +143,6 @@ public class SkillService {
             item.put("reason", "全站热搜 · 高浏览量");
         }
         return item;
-    }
-
-    private void ensureTable() {
-        try {
-            jdbcTemplate.execute("""
-                CREATE TABLE IF NOT EXISTS `browse_history` (
-                    `id`          BIGINT   NOT NULL AUTO_INCREMENT,
-                    `user_id`     BIGINT   NOT NULL,
-                    `product_id`  BIGINT   NOT NULL,
-                    `category`    VARCHAR(50) NOT NULL,
-                    `created_at`  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                    PRIMARY KEY (`id`),
-                    KEY `idx_user_id` (`user_id`),
-                    KEY `idx_category` (`category`)
-                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-            """);
-        } catch (Exception ignored) {}
     }
 
     // === pricing ===

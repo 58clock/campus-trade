@@ -15,7 +15,6 @@ import com.campus.mapper.ProductMapper;
 import com.campus.mapper.UserMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -31,7 +30,6 @@ public class ProductService {
     private final ProductMapper productMapper;
     private final UserMapper userMapper;
     private final BrowseHistoryMapper browseHistoryMapper;
-    private final JdbcTemplate jdbcTemplate;
 
     // ==================== [桩] B 实现的真实接口 ====================
 
@@ -100,28 +98,15 @@ public class ProductService {
         // 记录浏览历史（登录用户）
         if (userId != null) {
             try {
-                // 确保表存在
-                jdbcTemplate.execute("""
-                    CREATE TABLE IF NOT EXISTS `browse_history` (
-                        `id`          BIGINT   NOT NULL AUTO_INCREMENT,
-                        `user_id`     BIGINT   NOT NULL,
-                        `product_id`  BIGINT   NOT NULL,
-                        `category`    VARCHAR(50) NOT NULL,
-                        `created_at`  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                        PRIMARY KEY (`id`),
-                        KEY `idx_user_id` (`user_id`),
-                        KEY `idx_category` (`category`)
-                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-                """);
                 BrowseHistory bh = new BrowseHistory();
                 bh.setUserId(userId);
                 bh.setProductId(id);
                 bh.setCategory(prod.getCategory());
                 bh.setCreatedAt(LocalDateTime.now());
                 browseHistoryMapper.insert(bh);
-                log.info("Browse recorded: userId={}, productId={}, category={}", userId, id, prod.getCategory());
+                log.info("Browse OK: uid={} pid={} cat={}", userId, id, prod.getCategory());
             } catch (Exception e) {
-                log.warn("Failed to record browse: {}", e.getMessage());
+                log.error("Browse FAIL: uid={} pid={} — {}", userId, id, e.toString());
             }
         }
 
