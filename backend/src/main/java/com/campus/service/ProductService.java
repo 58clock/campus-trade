@@ -94,11 +94,13 @@ public class ProductService {
 
         // 记录浏览历史（登录用户）
         if (userId != null) {
-            BrowseHistory history = new BrowseHistory();
-            history.setUserId(userId);
-            history.setProductId(id);
-            history.setCategory(prod.getCategory());
-            browseHistoryMapper.insert(history);
+            try {
+                BrowseHistory history = new BrowseHistory();
+                history.setUserId(userId);
+                history.setProductId(id);
+                history.setCategory(prod.getCategory());
+                browseHistoryMapper.insert(history);
+            } catch (Exception ignored) {}
         }
 
         ProductVO vo = new ProductVO();

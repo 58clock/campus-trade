@@ -23,11 +23,16 @@ public class SkillService {
 
     public Result<List<Map<String, Object>>> recommend(Long userId, int limit) {
         // 1. 查询用户浏览历史，按分类统计浏览次数
-        List<BrowseHistory> history = browseHistoryMapper.selectList(
-                new LambdaQueryWrapper<BrowseHistory>()
-                        .eq(BrowseHistory::getUserId, userId)
-                        .orderByDesc(BrowseHistory::getCreatedAt)
-                        .last("LIMIT 100"));
+        List<BrowseHistory> history;
+        try {
+            history = browseHistoryMapper.selectList(
+                    new LambdaQueryWrapper<BrowseHistory>()
+                            .eq(BrowseHistory::getUserId, userId)
+                            .orderByDesc(BrowseHistory::getCreatedAt)
+                            .last("LIMIT 100"));
+        } catch (Exception e) {
+            return recommendHot(userId, limit);
+        }
 
         if (history.isEmpty()) {
             // 无浏览历史：推荐全站热门商品
