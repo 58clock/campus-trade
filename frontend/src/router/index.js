@@ -19,7 +19,8 @@ const routes = [
     component: () => import('@/views/admin/AdminLayout.vue'),
     meta: { auth: true, admin: true },
     children: [
-      { path: '', redirect: '/admin/orders' },
+      { path: '', redirect: '/admin/dashboard' },
+      { path: 'dashboard', name: 'AdminDashboard', component: () => import('@/views/admin/Dashboard.vue') },
       { path: 'orders', name: 'AdminOrders', component: () => import('@/views/admin/OrderManage.vue') },
       { path: 'users', name: 'AdminUsers', component: () => import('@/views/admin/UserManage.vue') },
       { path: 'products', name: 'AdminProducts', component: () => import('@/views/admin/ProductAudit.vue') },

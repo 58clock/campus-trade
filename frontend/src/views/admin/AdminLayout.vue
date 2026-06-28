@@ -10,6 +10,10 @@
           text-color="#bfcbd9"
           active-text-color="#409EFF"
         >
+          <el-menu-item index="/admin/dashboard">
+            <el-icon><DataAnalysis /></el-icon>
+            <span>数据统计</span>
+          </el-menu-item>
           <el-menu-item index="/admin/orders">
             <el-icon><Document /></el-icon>
             <span>订单管理</span>
@@ -40,7 +44,7 @@
 <script setup>
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
-import { Document, User, Goods, Warning } from '@element-plus/icons-vue'
+import { DataAnalysis, Document, User, Goods, Warning } from '@element-plus/icons-vue'
 
 const route = useRoute()
 const activeMenu = computed(() => route.path)
