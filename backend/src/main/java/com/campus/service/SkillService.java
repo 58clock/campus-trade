@@ -22,6 +22,7 @@ public class SkillService {
     private final BrowseHistoryMapper browseHistoryMapper;
 
     public Result<Map<String, Object>> recommend(Long userId, int limit) {
+        // 1. 查询用户浏览历史
         List<BrowseHistory> history;
         try {
             history = browseHistoryMapper.selectList(
@@ -30,104 +31,72 @@ public class SkillService {
                             .orderByDesc(BrowseHistory::getCreatedAt)
                             .last("LIMIT 100"));
         } catch (Exception e) {
-            return recommendHot(userId, limit);
+            history = List.of();
         }
 
-        if (history.isEmpty()) {
-            return recommendHot(userId, limit);
-        }
-
-        // 统计每个分类的浏览次数
+        // 2. 统计浏览的分类频次
         Map<String, Long> categoryCount = history.stream()
                 .collect(Collectors.groupingBy(BrowseHistory::getCategory, LinkedHashMap::new, Collectors.counting()));
 
-        // 用户浏览过的商品ID，避免重复推荐
         Set<Long> viewedIds = history.stream()
                 .map(BrowseHistory::getProductId)
                 .collect(Collectors.toSet());
 
-        // 用户浏览过的商品价格范围
-        Set<Long> browsedProductIds = new HashSet<>(viewedIds);
-        List<Product> browsedProducts = productMapper.selectBatchIds(browsedProductIds);
-        BigDecimal browsePriceMin = null, browsePriceMax = null;
-        if (!browsedProducts.isEmpty()) {
-            browsePriceMin = browsedProducts.stream()
-                    .map(Product::getPrice).filter(Objects::nonNull)
-                    .min(BigDecimal::compareTo).orElse(BigDecimal.ZERO);
-            browsePriceMax = browsedProducts.stream()
-                    .map(Product::getPrice).filter(Objects::nonNull)
-                    .max(BigDecimal::compareTo).orElse(BigDecimal.ZERO);
-        }
-
-        // Phase 1: 在用户浏览过的分类中找商品
-        Set<Long> seen = new HashSet<>();
-        List<Product> ranked = new ArrayList<>();
-        for (String category : categoryCount.keySet()) {
-            List<Product> categoryProducts = productMapper.selectList(
-                    new LambdaQueryWrapper<Product>()
-                            .eq(Product::getCategory, category)
-                            .eq(Product::getStatus, "ON_SALE")
-                            .ne(Product::getUserId, userId)
-                            .orderByDesc(Product::getViewCount)
-                            .last("LIMIT 20"));
-            for (Product p : categoryProducts) {
-                if (seen.add(p.getId()) && !viewedIds.contains(p.getId())) {
-                    ranked.add(p);
-                }
-            }
-        }
-
-        // 按分类频次和浏览量排序
-        ranked.sort((a, b) -> {
-            long aCnt = categoryCount.getOrDefault(a.getCategory(), 0L);
-            long bCnt = categoryCount.getOrDefault(b.getCategory(), 0L);
-            if (aCnt != bCnt) return Long.compare(bCnt, aCnt);
-            return Integer.compare(b.getViewCount(), a.getViewCount());
-        });
-
-        // Phase 2: 如果不够，从浏览过的分类中再捞（放宽viewedId限制）
-        if (ranked.size() < limit) {
+        // 3. 版块一："猜你喜欢" — 从浏览分类中推荐
+        List<Map<String, Object>> personalized = new ArrayList<>();
+        if (!history.isEmpty()) {
+            Set<Long> seen = new HashSet<>();
+            List<Product> candidates = new ArrayList<>();
             for (String category : categoryCount.keySet()) {
-                List<Product> more = productMapper.selectList(
+                List<Product> catProducts = productMapper.selectList(
                         new LambdaQueryWrapper<Product>()
                                 .eq(Product::getCategory, category)
                                 .eq(Product::getStatus, "ON_SALE")
                                 .ne(Product::getUserId, userId)
                                 .orderByDesc(Product::getViewCount)
-                                .last("LIMIT 30"));
-                for (Product p : more) {
-                    if (seen.add(p.getId())) {
-                        ranked.add(p);
+                                .last("LIMIT 15"));
+                for (Product p : catProducts) {
+                    if (seen.add(p.getId()) && !viewedIds.contains(p.getId())) {
+                        candidates.add(p);
                     }
-                    if (ranked.size() >= limit) break;
                 }
-                if (ranked.size() >= limit) break;
+            }
+            candidates.sort((a, b) -> {
+                long aCnt = categoryCount.getOrDefault(a.getCategory(), 0L);
+                long bCnt = categoryCount.getOrDefault(b.getCategory(), 0L);
+                if (aCnt != bCnt) return Long.compare(bCnt, aCnt);
+                return Integer.compare(b.getViewCount(), a.getViewCount());
+            });
+            int n = Math.min(limit, candidates.size());
+            for (int i = 0; i < n; i++) {
+                Product p = candidates.get(i);
+                personalized.add(buildItem(p, categoryCount, history.size(), true));
             }
         }
 
-        // Phase 3: 实在不够才用其他分类热门补充，但分数打折扣
-        boolean hasSupplements = false;
-        if (ranked.size() < limit) {
-            hasSupplements = true;
-            List<Product> hot = productMapper.selectList(
-                    new LambdaQueryWrapper<Product>()
-                            .eq(Product::getStatus, "ON_SALE")
-                            .ne(Product::getUserId, userId)
-                            .orderByDesc(Product::getViewCount)
-                            .last("LIMIT 30"));
-            for (Product p : hot) {
-                if (seen.add(p.getId())) {
-                    ranked.add(p);
-                }
-                if (ranked.size() >= limit) break;
+        // 4. 版块二："全站热门" — 始终展示，排除已推荐和用户自己的
+        Set<Long> excludeIds = new HashSet<>(viewedIds);
+        for (Map<String, Object> item : personalized) {
+            excludeIds.add(((Number) item.get("productId")).longValue());
+        }
+        List<Product> hotProducts = productMapper.selectList(
+                new LambdaQueryWrapper<Product>()
+                        .eq(Product::getStatus, "ON_SALE")
+                        .ne(Product::getUserId, userId)
+                        .orderByDesc(Product::getViewCount)
+                        .last("LIMIT 30"));
+        List<Map<String, Object>> hot = new ArrayList<>();
+        for (Product p : hotProducts) {
+            if (excludeIds.add(p.getId())) {
+                hot.add(buildItem(p, categoryCount, history.size(), false));
             }
+            if (hot.size() >= limit) break;
         }
 
-        // 构建分析数据
+        // 5. 分析数据
         Map<String, Object> analysis = new LinkedHashMap<>();
         analysis.put("totalBrowses", history.size());
-        analysis.put("browseCount", history.size());
-        analysis.put("uniqueProducts", browsedProductIds.size());
+        analysis.put("uniqueProducts", viewedIds.size());
 
         List<Map<String, Object>> catList = new ArrayList<>();
         long maxCount = categoryCount.values().stream().max(Long::compareTo).orElse(1L);
@@ -140,55 +109,40 @@ public class SkillService {
         }
         analysis.put("topCategories", catList);
 
-        if (browsePriceMin != null) {
-            analysis.put("priceRange", browsePriceMin + " ~ " + browsePriceMax);
-        }
-
-        // 构建商品列表
-        List<Map<String, Object>> items = new ArrayList<>();
-        int count = Math.min(limit, ranked.size());
-        for (int i = 0; i < count; i++) {
-            Product p = ranked.get(i);
-            Map<String, Object> item = new LinkedHashMap<>();
-            item.put("productId", p.getId());
-            item.put("title", p.getTitle());
-            item.put("price", p.getPrice());
-            item.put("category", p.getCategory());
-            item.put("viewCount", p.getViewCount());
-
-            long catFreq = categoryCount.getOrDefault(p.getCategory(), 0L);
-            boolean fromBrowsedCategory = categoryCount.containsKey(p.getCategory());
-
-            if (fromBrowsedCategory) {
-                double score = 0.70 + Math.min(catFreq * 0.06, 0.25) + Math.random() * 0.04;
-                item.put("score", Math.min(score, 0.98));
-                item.put("reason", buildReason(p.getCategory(), catFreq, history.size()));
-            } else {
-                // 补充商品分数低于浏览分类商品
-                double score = 0.45 + Math.random() * 0.15;
-                item.put("score", Math.min(score, 0.60));
-                item.put("reason", "热门" + catName(p.getCategory()) + "，你可能也感兴趣");
-            }
-
-            items.add(item);
-        }
-
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("analysis", analysis);
-        result.put("items", items);
+        result.put("personalized", personalized);
+        result.put("hot", hot);
         return Result.ok(result);
     }
 
-    private String buildReason(String category, long catFreq, int totalBrowses) {
-        String catName = catName(category);
-        double ratio = (double) catFreq / totalBrowses;
-        if (ratio >= 0.6) {
-            return "你最近主要浏览" + catName + "，这是该分类的热门商品";
-        } else if (ratio >= 0.3) {
-            return "你经常浏览" + catName + "，为你推荐同类商品";
+    private Map<String, Object> buildItem(Product p, Map<String, Long> categoryCount,
+                                           int totalBrowses, boolean personalized) {
+        Map<String, Object> item = new LinkedHashMap<>();
+        item.put("productId", p.getId());
+        item.put("title", p.getTitle());
+        item.put("price", p.getPrice());
+        item.put("category", p.getCategory());
+        item.put("viewCount", p.getViewCount());
+
+        long catFreq = categoryCount.getOrDefault(p.getCategory(), 0L);
+        if (personalized && catFreq > 0) {
+            double score = 0.70 + Math.min(catFreq * 0.06, 0.25) + Math.random() * 0.04;
+            item.put("score", Math.min(score, 0.98));
+            item.put("reason", buildReason(p.getCategory(), catFreq, totalBrowses));
         } else {
-            return "你浏览过" + catName + "，猜你喜欢";
+            item.put("score", 0.60 + Math.random() * 0.25);
+            item.put("reason", "全站热搜 · 高浏览量");
         }
+        return item;
+    }
+
+    private String buildReason(String category, long catFreq, int totalBrowses) {
+        String cn = catName(category);
+        double ratio = (double) catFreq / totalBrowses;
+        if (ratio >= 0.6) return "你主要在逛「" + cn + "」，猜你喜欢";
+        if (ratio >= 0.3) return "你经常浏览「" + cn + "」，为你推荐";
+        return "你看过「" + cn + "」，可能感兴趣";
     }
 
     private String catName(String category) {
@@ -199,37 +153,6 @@ public class SkillService {
             case "SPORTS" -> "运动用品";
             default -> "其他";
         };
-    }
-
-    private Result<Map<String, Object>> recommendHot(Long userId, int limit) {
-        List<Product> products = productMapper.selectList(
-                new LambdaQueryWrapper<Product>()
-                        .eq(Product::getStatus, "ON_SALE")
-                        .ne(Product::getUserId, userId)
-                        .orderByDesc(Product::getViewCount)
-                        .last("LIMIT " + limit));
-
-        List<Map<String, Object>> items = new ArrayList<>();
-        for (Product p : products) {
-            Map<String, Object> item = new LinkedHashMap<>();
-            item.put("productId", p.getId());
-            item.put("title", p.getTitle());
-            item.put("price", p.getPrice());
-            item.put("category", p.getCategory());
-            item.put("viewCount", p.getViewCount());
-            item.put("score", 0.70 + Math.random() * 0.20);
-            item.put("reason", "全站热门商品，暂无你的浏览记录");
-            items.add(item);
-        }
-
-        Map<String, Object> analysis = new LinkedHashMap<>();
-        analysis.put("mode", "hot");
-        analysis.put("totalBrowses", 0);
-
-        Map<String, Object> result = new LinkedHashMap<>();
-        result.put("analysis", analysis);
-        result.put("items", items);
-        return Result.ok(result);
     }
 
     public Result<Map<String, Object>> suggestPrice(String category, String conditionLevel) {
