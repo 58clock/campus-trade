@@ -25,6 +25,8 @@
           <el-menu-item index="/my-products">我的发布</el-menu-item>
           <el-menu-item index="/my-orders">我的订单</el-menu-item>
           <el-menu-item index="/my-reports">我的举报</el-menu-item>
+          <el-menu-item index="/skills/recommend">AI 推荐</el-menu-item>
+          <el-menu-item index="/skills/pricing">定价建议</el-menu-item>
           <el-menu-item v-if="userStore.isAdmin" index="/admin/dashboard">后台管理</el-menu-item>
           <el-menu-item @click="handleLogout">退出登录</el-menu-item>
         </el-sub-menu>
