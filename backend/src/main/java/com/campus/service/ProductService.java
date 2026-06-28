@@ -10,6 +10,8 @@ import com.campus.dto.ProductVO;
 import com.campus.entity.Product;
 import com.campus.entity.User;
 import com.campus.mapper.ProductMapper;
+import com.campus.entity.BrowseHistory;
+import com.campus.mapper.BrowseHistoryMapper;
 import com.campus.mapper.UserMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -24,6 +26,7 @@ public class ProductService {
 
     private final ProductMapper productMapper;
     private final UserMapper userMapper;
+    private final BrowseHistoryMapper browseHistoryMapper;
 
     // ==================== [桩] B 实现的真实接口 ====================
 
@@ -81,13 +84,22 @@ public class ProductService {
         return Result.ok(new PageResult<>(records, result.getTotal(), page, size));
     }
 
-    public Result<ProductVO> getProductById(Long id) {
+    public Result<ProductVO> getProductById(Long userId, Long id) {
         Product prod = productMapper.selectById(id);
         if (prod == null) return Result.fail("商品不存在");
 
         // 浏览量 +1
         prod.setViewCount(prod.getViewCount() + 1);
         productMapper.updateById(prod);
+
+        // 记录浏览历史（登录用户）
+        if (userId != null) {
+            BrowseHistory history = new BrowseHistory();
+            history.setUserId(userId);
+            history.setProductId(id);
+            history.setCategory(prod.getCategory());
+            browseHistoryMapper.insert(history);
+        }
 
         ProductVO vo = new ProductVO();
         vo.setId(prod.getId());

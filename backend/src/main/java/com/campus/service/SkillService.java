@@ -2,28 +2,112 @@ package com.campus.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.campus.common.Result;
+import com.campus.entity.BrowseHistory;
 import com.campus.entity.Product;
-import com.campus.entity.Review;
+import com.campus.mapper.BrowseHistoryMapper;
 import com.campus.mapper.ProductMapper;
-import com.campus.mapper.ReviewMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 public class SkillService {
 
     private final ProductMapper productMapper;
-    private final ReviewMapper reviewMapper;
+    private final BrowseHistoryMapper browseHistoryMapper;
 
     public Result<List<Map<String, Object>>> recommend(Long userId, int limit) {
-        // TODO: D - 简单推荐逻辑：同分类热门商品（按浏览量倒序）
-        // 1. 查用户发布/购买过的商品分类
-        // 2. 在该分类下推荐高浏览量商品
+        // 1. 查询用户浏览历史，按分类统计浏览次数
+        List<BrowseHistory> history = browseHistoryMapper.selectList(
+                new LambdaQueryWrapper<BrowseHistory>()
+                        .eq(BrowseHistory::getUserId, userId)
+                        .orderByDesc(BrowseHistory::getCreatedAt)
+                        .last("LIMIT 100"));
+
+        if (history.isEmpty()) {
+            // 无浏览历史：推荐全站热门商品
+            return recommendHot(userId, limit);
+        }
+
+        // 2. 统计每个分类的浏览次数
+        Map<String, Long> categoryCount = history.stream()
+                .collect(Collectors.groupingBy(BrowseHistory::getCategory, LinkedHashMap::new, Collectors.counting()));
+
+        // 3. 获取用户浏览过的商品ID，避免重复推荐
+        Set<Long> viewedIds = history.stream()
+                .map(BrowseHistory::getProductId)
+                .collect(Collectors.toSet());
+
+        // 4. 在每个分类下找热门商品
+        List<Product> candidates = new ArrayList<>();
+        for (String category : categoryCount.keySet()) {
+            List<Product> categoryProducts = productMapper.selectList(
+                    new LambdaQueryWrapper<Product>()
+                            .eq(Product::getCategory, category)
+                            .eq(Product::getStatus, "ON_SALE")
+                            .ne(Product::getUserId, userId)
+                            .orderByDesc(Product::getViewCount)
+                            .last("LIMIT 10"));
+            candidates.addAll(categoryProducts);
+        }
+
+        // 5. 去重 + 按分类频次和浏览量综合排序
+        Set<Long> seen = new HashSet<>();
+        List<Product> ranked = new ArrayList<>();
+        for (Product p : candidates) {
+            if (seen.add(p.getId()) && !viewedIds.contains(p.getId())) {
+                ranked.add(p);
+            }
+        }
+
+        ranked.sort((a, b) -> {
+            long aCnt = categoryCount.getOrDefault(a.getCategory(), 0L);
+            long bCnt = categoryCount.getOrDefault(b.getCategory(), 0L);
+            if (aCnt != bCnt) return Long.compare(bCnt, aCnt);
+            return Integer.compare(b.getViewCount(), a.getViewCount());
+        });
+
+        if (ranked.size() < limit) {
+            // 不足时用热门商品补齐
+            List<Product> hot = productMapper.selectList(
+                    new LambdaQueryWrapper<Product>()
+                            .eq(Product::getStatus, "ON_SALE")
+                            .ne(Product::getUserId, userId)
+                            .orderByDesc(Product::getViewCount)
+                            .last("LIMIT 30"));
+            for (Product p : hot) {
+                if (seen.add(p.getId())) {
+                    ranked.add(p);
+                }
+                if (ranked.size() >= limit) break;
+            }
+        }
+
+        List<Map<String, Object>> result = new ArrayList<>();
+        int count = Math.min(limit, ranked.size());
+        for (int i = 0; i < count; i++) {
+            Product p = ranked.get(i);
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("productId", p.getId());
+            item.put("title", p.getTitle());
+            item.put("price", p.getPrice());
+            item.put("category", p.getCategory());
+            item.put("viewCount", p.getViewCount());
+            // 推荐指数：浏览分类频次越高分数越高
+            long catFreq = categoryCount.getOrDefault(p.getCategory(), 0L);
+            double score = 0.6 + Math.min(catFreq * 0.08, 0.35) + Math.random() * 0.05;
+            item.put("score", Math.min(score, 0.99));
+            result.add(item);
+        }
+        return Result.ok(result);
+    }
+
+    private Result<List<Map<String, Object>>> recommendHot(Long userId, int limit) {
         List<Product> products = productMapper.selectList(
                 new LambdaQueryWrapper<Product>()
                         .eq(Product::getStatus, "ON_SALE")
@@ -39,7 +123,7 @@ public class SkillService {
             item.put("price", p.getPrice());
             item.put("category", p.getCategory());
             item.put("viewCount", p.getViewCount());
-            item.put("score", 0.8 + Math.random() * 0.2);
+            item.put("score", 0.7 + Math.random() * 0.2);
             result.add(item);
         }
         return Result.ok(result);

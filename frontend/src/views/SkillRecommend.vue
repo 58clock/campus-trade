@@ -1,7 +1,7 @@
 <template>
   <div class="container">
-    <h2 style="margin-bottom:16px">AI 智能推荐 <el-tag type="warning" size="small">Skill</el-tag></h2>
-    <p style="color:#999;margin-bottom:16px">根据平台热门商品为你推荐，排除你已发布的商品</p>
+    <h2 style="margin-bottom:16px">智能推荐 <el-tag type="warning" size="small">Skill</el-tag></h2>
+    <p style="color:#999;margin-bottom:16px">根据你的浏览历史推荐相似商品。多浏览同类商品可提高推荐精准度。</p>
 
     <div v-if="items.length > 0" class="product-grid">
       <el-card v-for="p in items" :key="p.productId" class="product-card" shadow="hover" @click="$router.push(`/product/${p.productId}`)">

@@ -34,8 +34,9 @@ public class ProductController {
 
     @Operation(summary = "商品详情(公开)")
     @GetMapping("/{id}")
-    public Result<ProductVO> getById(@PathVariable Long id) {
-        return productService.getProductById(id);
+    public Result<ProductVO> getById(Authentication auth, @PathVariable Long id) {
+        Long userId = auth != null ? (Long) auth.getPrincipal() : null;
+        return productService.getProductById(userId, id);
     }
 
     @Operation(summary = "发布商品")

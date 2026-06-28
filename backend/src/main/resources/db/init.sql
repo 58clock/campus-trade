@@ -126,6 +126,19 @@ CREATE TABLE IF NOT EXISTS `report` (
     KEY `idx_target` (`target_type`, `target_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='举报表';
 
+-- 浏览历史表
+CREATE TABLE IF NOT EXISTS `browse_history` (
+    `id`              BIGINT          NOT NULL AUTO_INCREMENT  COMMENT '记录ID',
+    `user_id`         BIGINT          NOT NULL                 COMMENT '用户ID',
+    `product_id`      BIGINT          NOT NULL                 COMMENT '商品ID',
+    `category`        VARCHAR(50)     NOT NULL                 COMMENT '商品分类',
+    `created_at`      DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '浏览时间',
+    PRIMARY KEY (`id`),
+    KEY `idx_user_id` (`user_id`),
+    KEY `idx_category` (`category`),
+    KEY `idx_created_at` (`created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='浏览历史表';
+
 -- 初始管理员账号: admin / admin123
 INSERT INTO `user` (`username`, `password`, `role`, `nickname`) VALUES
 ('admin', '$2a$10$PvX4ay.e7/3M2bsVcLIRe.c3E66pEdAnOnhrRPR8ojErrVhiSmf5O', 'ADMIN', '系统管理员');
