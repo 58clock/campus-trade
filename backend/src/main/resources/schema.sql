@@ -1,3 +1,4 @@
+USE campus_trade;
 CREATE TABLE IF NOT EXISTS `browse_history` (
     `id`          BIGINT       NOT NULL AUTO_INCREMENT,
     `user_id`     BIGINT       NOT NULL,
