@@ -4,7 +4,9 @@
     <el-menu
       mode="horizontal"
       :ellipsis="false"
+      :default-active="route.path"
       router
+      class="navbar"
     >
       <el-menu-item index="/">
         <el-icon><Shop /></el-icon>
@@ -42,15 +44,23 @@
 
 <script setup>
 import { useUserStore } from '@/stores/user'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
+import { ElMessageBox } from 'element-plus'
 import { Shop } from '@element-plus/icons-vue'
 
 const userStore = useUserStore()
 const router = useRouter()
+const route = useRoute()
 
 function handleLogout() {
-  userStore.logout()
-  router.push('/login')
+  ElMessageBox.confirm('确定要退出登录吗？', '提示', {
+    confirmButtonText: '确定',
+    cancelButtonText: '取消',
+    type: 'warning',
+  }).then(() => {
+    userStore.logout()
+    router.push('/login')
+  }).catch(() => {})
 }
 </script>
 
@@ -59,4 +69,10 @@ function handleLogout() {
 body { font-family: 'Helvetica Neue', Helvetica, 'PingFang SC', 'Microsoft YaHei', sans-serif; }
 .flex-grow { flex-grow: 1; }
 #app { min-height: 100vh; background: #f5f7fa; }
+
+.navbar {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
 </style>

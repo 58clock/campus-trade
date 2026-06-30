@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
+import { userApi } from '@/api'
 
 export const useUserStore = defineStore('user', () => {
   const token = ref(localStorage.getItem('token') || '')
@@ -20,6 +21,18 @@ export const useUserStore = defineStore('user', () => {
     localStorage.setItem('user', JSON.stringify(u))
   }
 
+  async function fetchProfile() {
+    try {
+      const res = await userApi.getProfile()
+      if (res.code === 200) {
+        user.value = res.data
+        localStorage.setItem('user', JSON.stringify(res.data))
+      }
+    } catch {
+      // token 失效时不做额外处理，拦截器已统一处理
+    }
+  }
+
   function logout() {
     token.value = ''
     user.value = null
@@ -27,5 +40,5 @@ export const useUserStore = defineStore('user', () => {
     localStorage.removeItem('user')
   }
 
-  return { token, user, isLoggedIn, isAdmin, setAuth, setUser, logout }
+  return { token, user, isLoggedIn, isAdmin, setAuth, setUser, fetchProfile, logout }
 })
