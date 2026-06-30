@@ -33,7 +33,8 @@
           <el-input v-model="form.description" type="textarea" :rows="4" placeholder="请描述商品详情" />
         </el-form-item>
         <el-form-item label="图片">
-          <el-upload multiple :auto-upload="false" :on-change="handleImageChange" list-type="picture-card">
+          <!-- <el-upload multiple :auto-upload="false" :on-change="handleImageChange" list-type="picture-card"> -->
+          <el-upload multiple :auto-upload="false" :on-change="handleImageChange" :on-remove="handleRemove" :before-upload="beforeUpload" :limit="9" accept="image/*" list-type="picture-card">
             <el-icon><Plus /></el-icon>
           </el-upload>
         </el-form-item>
@@ -58,11 +59,30 @@ const form = reactive({
   title: '', category: '', conditionLevel: '',
   price: null, originalPrice: null, description: ''
 })
-const images = ref([])
+//const images = ref([])
 
-function handleImageChange(file) { images.value.push(file.raw) }
+//function handleImageChange(file) { images.value.push(file.raw) }
+const imageFiles = ref([])
+function handleImageChange(uploadFile, uploadFiles) {
+  imageFiles.value = uploadFiles
+}
+function handleRemove() {
+  imageFiles.value = imageFiles.value.filter(f => f.status === 'ready' || f.status === 'success')
+}
+function beforeUpload(file) {
+  const isImage = file.type.startsWith('image/')
+  const isLt5M = file.size / 1024 / 1024 < 5
+  if (!isImage) ElMessage.error('只能上传图片文件')
+  if (!isLt5M) ElMessage.error('图片不能超过 5MB')
+  return isImage && isLt5M
+}
 
 async function handlePublish() {
+  if (!form.title) return ElMessage.warning('请输入商品标题')
+  if (!form.category) return ElMessage.warning('请选择分类')
+  if (!form.conditionLevel) return ElMessage.warning('请选择成色')
+  if (form.price === null) return ElMessage.warning('请输入售价')
+  if (form.price <= 0) return ElMessage.warning('售价必须大于 0')
   const fd = new FormData()
   fd.append('title', form.title)
   fd.append('category', form.category)
@@ -70,7 +90,8 @@ async function handlePublish() {
   fd.append('price', form.price)
   fd.append('description', form.description || '')
   if (form.originalPrice) fd.append('originalPrice', form.originalPrice)
-  images.value.forEach(f => fd.append('images', f))
+  //images.value.forEach(f => fd.append('images', f))
+  imageFiles.value.forEach(f => fd.append('images', f.raw))
   try {
     await productApi.create(fd)
     ElMessage.success('发布成功')

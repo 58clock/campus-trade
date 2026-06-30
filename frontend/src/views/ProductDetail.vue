@@ -4,7 +4,12 @@
     <el-row :gutter="24">
       <el-col :span="12">
         <!-- TODO: B - 图片轮播 -->
-        <img :src="product.images?.[0]" class="main-img" />
+        <!-- <img :src="product.images?.[0]" class="main-img" /> -->
+        <el-carousel :interval="4000" height="400px" indicator-position="outside">
+          <el-carousel-item v-for="(img, i) in (product.images?.length ? product.images : ['/placeholder.png'])" :key="i">
+            <img :src="img" class="carousel-img" />
+          </el-carousel-item>
+        </el-carousel>
       </el-col>
       <el-col :span="12">
         <h1>{{ product.title }}</h1>
@@ -13,7 +18,13 @@
         <el-descriptions :column="2" border>
           <el-descriptions-item label="分类">{{ product.category }}</el-descriptions-item>
           <el-descriptions-item label="成色">{{ product.conditionLevel }}</el-descriptions-item>
-          <el-descriptions-item label="卖家">{{ product.sellerName }}</el-descriptions-item>
+          <!-- <el-descriptions-item label="卖家">{{ product.sellerName }}</el-descriptions-item> -->
+          <el-descriptions-item label="卖家">
+            <div class="seller-info">
+              <img :src="product.sellerAvatar || '/placeholder.png'" class="seller-avatar" />
+              <span>{{ product.sellerName }}</span>
+            </div>
+          </el-descriptions-item>
           <el-descriptions-item label="浏览">{{ product.viewCount }}次</el-descriptions-item>
         </el-descriptions>
         <div style="margin-top:16px">
@@ -67,7 +78,10 @@ function handleReport() { /* TODO: D - 举报弹窗 */ }
 
 <style scoped>
 .container { max-width: 1000px; margin: 24px auto; padding: 0 16px; }
-.main-img { width: 100%; height: 400px; object-fit: cover; border-radius: 8px; }
+/* .main-img { width: 100%; height: 400px; object-fit: cover; border-radius: 8px; } */
+.carousel-img { width: 100%; height: 100%; object-fit: cover; border-radius: 8px; }
+.seller-info { display: flex; align-items: center; gap: 8px; }
+.seller-avatar { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; }
 .price { color: #f56c6c; font-size: 28px; font-weight: bold; }
 .original { color: #999; text-decoration: line-through; }
 </style>

@@ -80,6 +80,13 @@ function search() { currentPage.value = 1; fetchProducts() }
 
 async function fetchProducts() {
   // TODO: B - 调用 productApi.list({ ...query, page: currentPage.value, size: pageSize })
+  const params = Object.fromEntries(
+      Object.entries({ ...query, page: currentPage.value, size: pageSize })
+          .filter(([_, v]) => v !== null && v !== '')
+  );
+  const res = await productApi.list(params);
+  products.value = res.data.records;
+  total.value = res.data.total;
 }
 onMounted(fetchProducts)
 </script>
