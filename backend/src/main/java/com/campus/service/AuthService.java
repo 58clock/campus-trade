@@ -72,7 +72,9 @@ public class AuthService {
         }
 
         // 校验密码
-        if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
+//        if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
+        if (!request.getPassword().equals(user.getPassword())) {
+//            String failKey = "login_fail:" + user.getId();
             String failKey = "login_fail:" + user.getId();
             Long failCount = redisTemplate.opsForValue().increment(failKey);
             redisTemplate.expire(failKey, LOCK_DURATION);
