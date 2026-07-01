@@ -63,13 +63,13 @@ public class OrderService {
         order.setCreatedAt(LocalDateTime.now());
         order.setUpdatedAt(LocalDateTime.now());
         orderMapper.insert(order);
-        orderMapper.insert(order);
 
         product.setStatus(ProductStatus.LOCKED.name());
         productMapper.updateById(product);
 
         OrderVO vo = new OrderVO();
         BeanUtils.copyProperties(order, vo);
+
         return Result.ok(vo);
     }
 
@@ -89,14 +89,35 @@ public class OrderService {
     public Result<Void> pay(Long userId, Long id) {
         // TODO: C - 模拟付款，校验是买家 + 状态是 PENDING_PAYMENT → PENDING_SHIPMENT
         Order order = orderMapper.selectById(id);
-        if (order == null) return Result.fail("订单不存在");
+        if (order == null) {
+            return Result.fail("支付失败：订单号不存在");
+        }
 
-        Result<Void> error = checkStatus(order, OrderStatus.PENDING_PAYMENT, true, userId);
-        if (error != null) return error;
+        // 2. 权限校验
+        if (!order.getBuyerId().equals(userId)) {
+            return Result.fail("无权操作此订单");
+        }
 
+        // 3. 状态校验：防止对已取消或已完成的订单进行支付
+        if (order.getStatus().equals(OrderStatus.CANCELLED.name())) {
+            return Result.fail("支付失败：订单已取消，无法支付");
+        }
+
+        if (order.getStatus().equals(OrderStatus.COMPLETED.name())) {
+            return Result.fail("支付失败：订单已完成");
+        }
+
+        // 4. 业务校验：只有 PENDING_PAYMENT 状态才能支付
+        if (!order.getStatus().equals(OrderStatus.PENDING_PAYMENT.name())) {
+            return Result.fail("当前订单状态无法支付（可能已支付或正在处理中）");
+        }
+
+        // 5. 执行付款逻辑
         order.setStatus(OrderStatus.PENDING_SHIPMENT.name());
         order.setPaidAt(LocalDateTime.now());
+        order.setUpdatedAt(LocalDateTime.now());
         orderMapper.updateById(order);
+
         return Result.ok();
     }
 
@@ -105,9 +126,17 @@ public class OrderService {
         Order order = orderMapper.selectById(id);
         if (order == null) return Result.fail("订单不存在");
 
-        Result<Void> error = checkStatus(order, OrderStatus.PENDING_SHIPMENT, false, userId);
-        if (error != null) return error;
+        // 1. 严格权限校验：必须是卖家本人
+        if (!order.getSellerId().equals(userId)) {
+            return Result.fail("无权操作：只有卖家才能执行发货");
+        }
 
+        // 2. 状态校验：只有已付款的订单才能发货
+        if (!order.getStatus().equals(OrderStatus.PENDING_SHIPMENT.name())) {
+            return Result.fail("发货失败：当前订单状态不可发货（可能未付款或已取消）");
+        }
+
+        // 3. 执行发货
         order.setStatus(OrderStatus.PENDING_RECEIPT.name());
         order.setShippedAt(LocalDateTime.now());
         orderMapper.updateById(order);
@@ -119,9 +148,22 @@ public class OrderService {
         Order order = orderMapper.selectById(id);
         if (order == null) return Result.fail("订单不存在");
 
-        Result<Void> error = checkStatus(order, OrderStatus.PENDING_RECEIPT, true, userId);
-        if (error != null) return error;
+        // 1. 严格权限校验：必须是买家本人
+        if (!order.getBuyerId().equals(userId)) {
+            return Result.fail("无权操作：只有买家才能确认收货");
+        }
 
+        // 2. 状态校验：严禁在卖家发货前收货
+        if (order.getStatus().equals(OrderStatus.PENDING_SHIPMENT.name())) {
+            return Result.fail("收货失败：卖家尚未发货");
+        }
+
+        // 3. 状态校验：必须处于待收货状态
+        if (!order.getStatus().equals(OrderStatus.PENDING_RECEIPT.name())) {
+            return Result.fail("当前订单状态无法确认收货");
+        }
+
+        // 4. 执行收货
         order.setStatus(OrderStatus.COMPLETED.name());
         order.setReceivedAt(LocalDateTime.now());
         order.setCompletedAt(LocalDateTime.now());
@@ -132,24 +174,38 @@ public class OrderService {
     public Result<Void> cancel(Long userId, Long id, String reason) {
         // TODO: C - 取消订单，仅 PENDING_PAYMENT 状态可取消 → CANCELLED
         Order order = orderMapper.selectById(id);
-        if (order == null) return Result.fail("订单不存在");
-
-        if (!order.getBuyerId().equals(userId)) return Result.fail("无权操作");
-        if (!order.getStatus().equals(OrderStatus.PENDING_PAYMENT.name()) &&
-                !order.getStatus().equals(OrderStatus.PENDING_SHIPMENT.name())) {
-            return Result.fail("当前订单无法取消");
+        if (order == null) {
+            return Result.fail("操作失败：订单号不存在");
         }
 
+        // 2. 权限校验
+        if (!order.getBuyerId().equals(userId)) {
+            return Result.fail("无权操作此订单");
+        }
+
+        // 3. 状态校验：防止重复取消
+        if (order.getStatus().equals(OrderStatus.CANCELLED.name())) {
+            return Result.fail("该订单已经是取消状态，无需重复操作");
+        }
+
+        // 4. 业务校验：已付款订单不能取消
+        if (!order.getStatus().equals(OrderStatus.PENDING_PAYMENT.name())) {
+            return Result.fail("订单已付款，无法直接取消，请联系客服处理");
+        }
+
+        // 5. 执行取消逻辑
         order.setStatus(OrderStatus.CANCELLED.name());
         order.setCancelledAt(LocalDateTime.now());
         order.setCancelReason(reason);
         orderMapper.updateById(order);
 
+        // 6. 恢复商品状态
         Product product = productMapper.selectById(order.getProductId());
         if (product != null) {
             product.setStatus(ProductStatus.ON_SALE.name());
             productMapper.updateById(product);
         }
+
         return Result.ok();
     }
 
